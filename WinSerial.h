@@ -13,13 +13,23 @@
 namespace WinSer {
 	namespace Buffer {
 		class SerialBufferException: public std::exception {
+		public:
+			enum class EType{
+				Overflow,
+				Underflow,
+				WriteRetryTimeout
+			};
 		private:
 			std::string message_;
-
+			EType error;
 		public:
-			explicit SerialBufferException(const std::string& message) : message_(message) {}
+			
+			explicit SerialBufferException(const std::string& message, const EType E) : message_(message), error(E) {}
 			const char* what() const noexcept override {
 				return message_.c_str();
+			}
+			EType GetType(){
+				return error;
 			}
 		};
 
@@ -34,22 +44,31 @@ namespace WinSer {
 			void push(char C){
 				// check if buffer is full
 				Mutex.lock();
-				if(count >= SERIALBUFFERSIZE){ throw SerialBufferException("Buffer overflow during push operation"); return; }
+				if(count >= SERIALBUFFERSIZE){ throw SerialBufferException("Buffer overflow during push operation", SerialBufferException::EType::Overflow); return; }
 				buff[count + front] = C;
 				count++;
 				Mutex.unlock();
 			}
-			int pop(void){
+			char pop(void){
 				Mutex.lock();
-				if(!count){ throw SerialBufferException("Buffer empty during pop operation"); return -1;}
+				if(!count){ throw SerialBufferException("Buffer empty during pop operation", SerialBufferException::EType::Underflow); return 0;}
 				front++;
 				count--;
 				return buff[front-1];
 				Mutex.unlock();
 			}
 			void flushbuffer(){
+				Mutex.lock();
 				count = 0;
 				front = 0;
+				Mutex.unlock();
+			}
+			unsigned int getbuffersize(){
+				unsigned int size = 0;
+				Mutex.lock();
+				size = count;
+				Mutex.unlock();
+				return size;
 			}
 		} Buffer;
 	}; // end of namespace Buffer
@@ -158,9 +177,10 @@ namespace WinSer {
 
 		//* returns first byte of incoming serial data available.
 		//! returns -1 if no data available
-		int read();
+		char read();
 		
-		//* reads incomming buffer into char array 
+		//* reads incoming buffer into char array 
+		//* returns the amount of read bytes
 		//? Terminates when buffer empty or if it reaches size of length
 		int readBytes(char* buffer, unsigned int length);
 
@@ -168,10 +188,10 @@ namespace WinSer {
 		//* returns the amount of read bytes
 		//? Terminates when buffer empty or if it reaches terminator character
 		//! terminator is discarded from serial buffer
-		int readBytesUntil(char terminator, char* buffer, int length);
+		int readBytesUntil(char terminator, char* buffer, unsigned int length);
 		
 		//* reads the Incoming buffer into a string
-		//* returns the amount of read bytes
+		//* returns a string of bytes read
 		//? Terminates when buffer empty
 		std::string readString();
 		

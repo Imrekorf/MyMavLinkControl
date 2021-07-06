@@ -94,7 +94,6 @@ unsigned int Serial::availableForWrite(){
 	return SERIALBUFFERSIZE - OutGoingBuffer.count;
 }
 
-//! TODO: wait for transmission of outgoing data to complete
 void Serial::flush(unsigned int refreshrate){
 	while(1){
 		OutGoingBuffer.Mutex.lock();
@@ -131,60 +130,82 @@ void Serial::setTimeout(SerTimeOut ST){
 	IncomingBuffer.Mutex.unlock();
 }
 
-int Serial::read(){
-	return IncomingBuffer.pop();
+char Serial::read(){
+	char temp = IncomingBuffer.pop();
 }
 
 int Serial::readBytes(char* buffer, unsigned int length){
 	unsigned int i = 0;
+	if(length == 0){
+		length = IncomingBuffer.getbuffersize();
+	}
 	for(; i < length; i++){
-		char temp = IncomingBuffer.pop();
-		if(temp == -1){
+		try{
+			char temp = this->read();
+			buffer[i] = temp;
+		}
+		catch(WinSer::Buffer::SerialBufferException const &e){
 			break;
 		}
-		buffer[i] = temp;
 	}
 	return i;
 }
 
-int Serial::readBytesUntil(char terminator, char* buffer, int length){
+int Serial::readBytesUntil(char terminator, char* buffer, unsigned int length){
 	unsigned int i = 0;
+	if(length == 0){
+		length = IncomingBuffer.getbuffersize();
+	}
 	for(; i < length; i++){
-		char temp = IncomingBuffer.pop();
-		if(temp == -1 || temp == terminator){
+		try{
+			char temp = this->read();	
+			buffer[i] = temp;
+			if(temp == terminator){
+				break;
+			}
+		}
+		catch(WinSer::Buffer::SerialBufferException const &e){
 			break;
 		}
-		buffer[i] = temp;
 	}
 	return i;
 }
 
 std::string Serial::readString(){
 	std::string S;
-	char temp = IncomingBuffer.pop();
-	while(temp != -1){
-		S += temp;
-		temp = IncomingBuffer.pop();
+	while(IncomingBuffer.getbuffersize()){
+		try{
+			S += this->read();
+		}
+		catch(WinSer::Buffer::SerialBufferException const &e){
+			break;
+		}
 	}
 	return S;
 }
 
 std::string Serial::readStringUntil(char terminator){
 	std::string S;
-	char temp = IncomingBuffer.pop();
-	while(temp != -1 && temp != terminator){
+	char temp;
+	do{
+		temp = this->read();
 		S += temp;
-		temp = IncomingBuffer.pop();
 	}
+	while(temp != terminator && IncomingBuffer.getbuffersize());
 	return S;
 }
 
 void Serial::write(char val){
-	try {
+	try{
 		OutGoingBuffer.push(val);
 	}
-	catch(std::exception e){
-		e.what();
+	catch(WinSer::Buffer::SerialBufferException const &e){
+		for(int i = 0; (i <= 10) && !this->availableForWrite(); i++){
+			std::this_thread::sleep_for(std::chrono::milliseconds(5));
+			if(i == 10){
+				throw WinSer::Buffer::SerialBufferException("Timeout after 50ms of trying to write character", WinSer::Buffer::SerialBufferException::EType::WriteRetryTimeout);
+			}
+		}
 	}
 }
 
