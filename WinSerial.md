@@ -28,7 +28,7 @@ Serial(char* Port, SerParam SP, SerTimeOut ST)
 * **SP:** contains the Serial Parameters for the Serial connection. E.g. baudrate, stopbits & Parity.<br>
 * **ST:** contains the Serial Timeout settings for the serial connection.
 ```c++
-unsinged int available()
+unsigned int available()
 ```
 **Description:** checks the amount of available bytes in incoming buffer.<br>
 **return value:** The number of bytes available to read from the incoming buffer. 
